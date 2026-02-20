@@ -1,0 +1,192 @@
+You are converting the package in /repos/ammo-ESM from CJS to ESM.
+
+# Conversion Instructions
+
+# ESM Conversion Prompt
+
+You are converting a Node.js CJS (CommonJS) package to ESM (ECMAScript Modules). The package is a @hapi ecosystem plugin. You must make the minimum changes necessary to convert it to ESM while keeping all existing tests passing.
+
+## Rules
+
+1. **Only change CJS ↔ ESM syntax.** Do not modify any logic, algorithms, data structures, error messages, or behavior.
+2. **Tests must pass using the existing test runner** (`@hapi/lab`). Lab already supports ESM — it detects `"type": "module"` in package.json and uses dynamic `import()` automatically.
+3. **Do not modify the substance of tests.** You may only change `require()` to `import` and `exports.lab` / `module.exports` to `export`. Do not alter assertions, test descriptions, or test logic.
+4. **Do not add, remove, or rename any exported API.** The public interface must remain identical.
+
+## Step-by-step conversion
+
+### 1. package.json
+
+- Add `"type": "module"` at the top level.
+- Remove the `"main"` field if present and replace with `"exports"`:
+  ```json
+  "exports": "./lib/index.js"
+  ```
+- Bump the major version (this is a breaking change).
+
+### 2. Source files (lib/**)
+
+For each `.js` file in `lib/`:
+
+**Remove** `'use strict';` — ESM is strict by default.
+
+**Replace requires with imports:**
+
+```js
+// BEFORE
+const Hoek = require('@hapi/hoek');
+const Assert = require('assert');
+const Path = require('path');
+
+// AFTER
+import Hoek from '@hapi/hoek';
+import Assert from 'node:assert';
+import Path from 'node:path';
+```
+
+- Use `node:` prefix for all Node.js built-in modules (`node:assert`, `node:path`, `node:fs`, `node:url`, `node:crypto`, `node:stream`, `node:querystring`, etc.).
+- For relative requires, add the `.js` extension: `require('./utils')` → `import Utils from './utils.js'`
+- For destructured requires: `const { something } = require('x')` → `import { something } from 'x'`
+
+**Replace exports:**
+
+Pattern A — `module.exports = value`:
+```js
+// BEFORE
+module.exports = function () { ... };
+
+// AFTER
+export default function () { ... };
+```
+
+Pattern B — Multiple `exports.name = ...` on a single file (e.g., Boom):
+```js
+// BEFORE
+exports.Boom = class extends Error { ... };
+exports.isBoom = function (err) { ... };
+
+// AFTER
+const Boom = class extends Error { ... };
+const isBoom = function (err) { ... };
+// ... all declarations first, then:
+export { Boom, isBoom, boomify, badRequest, /* ...every named export */ };
+```
+
+**CRITICAL:** When a file uses self-referential exports (e.g., `exports.Boom` referencing `exports.badRequest` within the same file), you must convert ALL `exports.X` references to just `X` throughout the file. Declare each as `const X = ...` and reference them directly. Then add a single `export { ... }` statement at the end listing all names.
+
+Pattern C — Re-export barrel file (e.g., Hoek's index.js):
+```js
+// BEFORE
+exports.applyToDefaults = require('./applyToDefaults');
+exports.assert = require('./assert');
+
+// AFTER
+export { default as applyToDefaults } from './applyToDefaults.js';
+export { default as assert } from './assert.js';
+```
+
+### 3. Test files (test/**)
+
+**Replace requires with imports:**
+```js
+// BEFORE
+const Boom = require('..');
+const Code = require('@hapi/code');
+const Lab = require('@hapi/lab');
+
+// AFTER
+import * as Boom from '../lib/index.js';
+import * as Code from '@hapi/code';
+import * as Lab from '@hapi/lab';
+```
+
+**Replace the lab export pattern:**
+```js
+// BEFORE
+const { describe, it } = exports.lab = Lab.script();
+const expect = Code.expect;
+
+// AFTER
+const lab = Lab.script();
+const { describe, it } = lab;
+const expect = Code.expect;
+export { lab };
+```
+
+**Remove** `'use strict';` from all test files.
+
+**Important:** When a test file uses `require()` for a relative path like `require('..')`, convert it to `import` with explicit path to the package entry point: `import * as Pkg from '../lib/index.js'`. The `..` shorthand relies on CJS `main` field resolution.
+
+**Dynamic requires in tests:** If a test uses `require()` dynamically (inside a function or conditionally), convert to `await import()`.
+
+### 4. __dirname / __filename
+
+If any file uses `__dirname` or `__filename`, replace with:
+```js
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+```
+
+### 5. JSON imports
+
+If any file requires a JSON file:
+```js
+// BEFORE
+const Package = require('../package.json');
+
+// AFTER
+import { readFileSync } from 'node:fs';
+const Package = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+```
+
+### 6. .labrc.js
+
+If a `.labrc.js` file exists, its contents should be converted to ESM as well and renamed to `.labrc.mjs` — or just convert it in place since `"type": "module"` will cover `.js` files.
+
+### 7. Verify
+
+After conversion, run:
+```bash
+npm install
+npm test
+```
+
+All tests must pass. If a test fails, diagnose whether the failure is an ESM conversion issue and fix it. Do not modify test assertions or logic to make tests pass — only fix import/export mechanics.
+
+## Common pitfalls
+
+- **Circular dependencies:** CJS tolerates circular requires (partial exports resolve lazily). ESM circular imports can cause TDZ errors. If you hit this, use lazy `await import()` in the function body that needs the circular dep.
+- **`exports.X` self-references:** The most error-prone pattern. In Boom for example, `exports.badRequest` calls `new exports.Boom(...)`. After conversion, this must be `new Boom(...)` — all self-references must be updated.
+- **`require.resolve()`:** Has no ESM equivalent. Use `import.meta.resolve()` (Node 20+) or `createRequire` from `node:module`.
+- **Default vs named exports:** When a CJS module does `module.exports = class Foo {}`, consumers expect `import Foo from 'pkg'`. When it does `exports.bar = ...`, consumers expect `import { bar } from 'pkg'`. Preserve the same pattern.
+- **Imports are hoisted:** Unlike `require()`, `import` statements are hoisted to the top of the module. This is usually fine but be aware if the original code depended on require ordering for side effects.
+
+## Do not
+
+- Add TypeScript
+- Add build steps or transpilation
+- Change any configuration beyond what's needed for ESM
+- Modify `.eslintrc` or linting config (disable linting if it blocks tests: remove `-L` flag from test script)
+- Add or remove dependencies
+- Change the API surface in any way
+
+
+This is your first attempt. Start the conversion from scratch.
+
+# Output Requirements
+
+When you are done, write a file called `summary.md` in the repo root (/repos/ammo-ESM/summary.md).
+
+If ALL tests pass and the conversion is fully complete, the summary MUST end with exactly this marker on its own line:
+
+<!-- ESM_CONVERSION_COMPLETE -->
+
+If tests are still failing or the conversion is incomplete, do NOT include that marker. Instead, describe:
+- What was converted
+- What errors remain
+- What you think needs to happen next
+
+Remember: only change CJS/ESM syntax. Do not modify logic, test assertions, or behavior.
