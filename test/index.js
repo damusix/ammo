@@ -18,6 +18,13 @@ describe('header()', () => {
         expect(Ammo.header('bytes=-5', 10)).toEqual([{ from: 5, to: 9 }]);
     });
 
+    it('parses header (-to beyond length)', () => {
+        expect(Ammo.header('bytes=-10', 10)).toEqual([{ from: 0, to: 9 }]);
+        expect(Ammo.header('bytes=-11', 10)).toEqual([{ from: 0, to: 9 }]);
+        expect(Ammo.header('bytes=-4294967296', 10)).toEqual([{ from: 0, to: 9 }]);
+        expect(Ammo.header('bytes=-999999999999999999999999', 10)).toEqual([{ from: 0, to: 9 }]);
+    });
+
     it('parses header (from-)', () => {
         expect(Ammo.header('bytes=5-', 45000)).toEqual([{ from: 5, to: 44999 }]);
     });

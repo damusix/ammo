@@ -44,7 +44,7 @@ export function header(header, length) {
                 }
             } else {
                 // -To
-                from = length - to;
+                from = Math.max(0, length - to);
                 to = lastPos;
             }
         } else {
