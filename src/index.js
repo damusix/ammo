@@ -9,7 +9,7 @@ import * as Hoek from '@hapi/hoek';
 // byte-range-spec = ( 1*DIGIT "-" [ 1*DIGIT ] ) / ( "-" 1*DIGIT )
 
 //                                12  3          3 4       425         6  7          7 8       865 1
-const headerRx = /^bytes=[\s,]*((?:(?:\d+\-\d*)|(?:\-\d+))(?:\s*,\s*(?:(?:\d+\-\d*)|(?:\-\d+)))*)$/i;
+const headerRx = /^bytes=[\s,]*((?:(?:\d+-\d*)|(?:-\d+))(?:\s*,\s*(?:(?:\d+-\d*)|(?:-\d+)))*)$/i;
 
 export function header(header, length) {
     // Parse header
@@ -22,7 +22,7 @@ export function header(header, length) {
     const lastPos = length - 1;
 
     const result = [];
-    const ranges = parts[1].match(/\d*\-\d*/g);
+    const ranges = parts[1].match(/\d*-\d*/g);
 
     // Handle headers with multiple ranges
 
