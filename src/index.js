@@ -11,10 +11,10 @@ import * as Hoek from '@hapi/hoek';
 //                                12  3          3 4       425         6  7          7 8       865 1
 const headerRx = /^bytes=[\s,]*((?:(?:\d+-\d*)|(?:-\d+))(?:\s*,\s*(?:(?:\d+-\d*)|(?:-\d+)))*)$/i;
 
-export function header(header, length) {
+export function header(field, length) {
     // Parse header
 
-    const parts = headerRx.exec(header);
+    const parts = headerRx.exec(field);
     if (!parts) {
         return null;
     }
