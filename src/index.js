@@ -36,8 +36,8 @@ export function header(header, length) {
 
         if (range[1]) {
             to = parseInt(range[1], 10);
+            // from can be 0
             if (from !== undefined) {
-                // Can be 0
                 // From-To
                 if (to > lastPos) {
                     to = lastPos;
